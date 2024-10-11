@@ -1,82 +1,53 @@
-﻿using Azure;
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
-using BlobStorage.Mock.Controllers;
-using BlobStorage.Mock.Models;
-using System.Text.Json;
-using System.Text.Json.Nodes;
+using Blobstorage.Mock.Exceptions;
 
-namespace BlobStorage.Mock.Services
+namespace Blobstorage.Mock.Services;
+
+public class AzureBlobStorageService : IBlobStorageService
 {
-    public class AzureBlobStorageService : IBlobStorageService
+    private readonly BlobContainerClient _blobContainerClient;
+
+    public AzureBlobStorageService(BlobContainerClient blobContainerClient)
     {
-        private readonly ILogger<MockController> _logger;
-        private readonly AzureBlobStorageOptions _azureBlobStorageSettings;
-        private BlobContainerClient _blobContainerClient;
+        _blobContainerClient = blobContainerClient;
+    }
 
-        public AzureBlobStorageService(ILogger<MockController> logger, IConfiguration configuration)
+    public async ValueTask<BinaryData?> RetrieveBlobAsync(string fileName)
+    {
+        BlobClient blob = _blobContainerClient.GetBlobClient(fileName);
+
+        Response<BlobDownloadResult> content = await blob.DownloadContentAsync();
+
+        return content.Value.Content;
+    }
+
+    public async ValueTask<bool> PathExistsAsync(string path)
+    {
+        try
         {
-            _logger = logger;
-            _azureBlobStorageSettings = configuration.GetSection("AzureBlobStorage").Get<AzureBlobStorageOptions>();
-            var blobClient = new BlobServiceClient(_azureBlobStorageSettings.ConnectionString);
-            _blobContainerClient = blobClient.GetBlobContainerClient(_azureBlobStorageSettings.ContainerName);
+            AsyncPageable<BlobItem> blobs = _blobContainerClient.GetBlobsAsync(prefix: path);
+
+            return await blobs.FirstOrDefaultAsync() != null;
         }
-
-        public dynamic GetMockFile(SearchFilter filter)
+        catch (RequestFailedException ex)
         {
-            var metadataBlob = DownloadBlob(filter.Path + "metadata.json");
-            var metadataList = JsonSerializer.Deserialize<MetadataDto[]>(metadataBlob.Content.ToString()).ToList();
-            MetadataDto metadata;
-
-            if (filter.Path.Contains("POST"))
-            {
-                JsonNode jsonFilterBody = JsonSerializer.SerializeToNode(filter.Body);
-                
-                metadata = metadataList.Find(metadata => {
-                    JsonNode jsonMetadataBody = JsonSerializer.SerializeToNode(metadata.Body);
-                    
-                    return JsonNode.DeepEquals(jsonFilterBody, jsonMetadataBody);
-                });
-
-            } else if(filter.Path.Contains("GET"))
-            {
-                metadata = metadataList.Find(metadata => metadata.SearchTerm == filter.SearchTerm);
-            } else
-            {
-                throw new Exception("No valid HTTP method found in the path");
-            }
-
-            try
-            {
-                var mockBlob = DownloadBlob(filter.Path + metadata.FileName);
-                return mockBlob.Content.ToDynamicFromJson();
-            }
-            catch (RequestFailedException ex)
-            {
-                throw new Exception("Error accessing or downloading the files in Azure blob storage", ex);
-            }
-            
+            throw new MockException("Error getting count of blobs in specified path", ex);
         }
+    }
 
-        public BlobDownloadResult DownloadBlob(string fileName)
+    public async ValueTask<bool> BlobExistsAsync(string fileName)
+    {
+        try
         {
-            var blob = _blobContainerClient.GetBlobClient(fileName);
-            return blob.DownloadContent();
+            BlobClient blob = _blobContainerClient.GetBlobClient(fileName);
+            Response<bool> exists = await blob.ExistsAsync();
+            return exists.Value;
         }
-
-
-        public bool FolderExists(string path)
+        catch (RequestFailedException ex)
         {
-            try
-            {
-                var blobs = _blobContainerClient.GetBlobs(prefix: path);
-
-                return blobs.Count() > 0;
-            }
-            catch (RequestFailedException ex)
-            {
-                throw new Exception("Error getting count of blobs in specified path", ex);
-            }
+            throw new MockException($"Error checking if blob exists at ({fileName})", ex);
         }
     }
 }

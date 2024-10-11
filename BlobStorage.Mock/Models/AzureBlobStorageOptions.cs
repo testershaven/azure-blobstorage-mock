@@ -1,8 +1,10 @@
-﻿namespace BlobStorage.Mock.Models
+namespace Blobstorage.Mock.Models;
+
+public class AzureBlobStorageOptions
 {
-    public class AzureBlobStorageOptions
-    {
-        public string ConnectionString { get; set; }
-        public string ContainerName { get; set; }
-    }
+    public const string ConfigPath = "AzureBlobStorage";
+
+    public required string ConnectionString { get; set; }
+    public required string ContainerName { get; set; }
+    public required bool PerfTestModeEnabled { get; set; }
 }

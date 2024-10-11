@@ -1,12 +1,8 @@
-﻿using Azure.Storage.Blobs.Models;
-using BlobStorage.Mock.Models;
+namespace Blobstorage.Mock.Services;
 
-namespace BlobStorage.Mock.Services
+public interface IBlobStorageService
 {
-    public interface IBlobStorageService
-    {
-        public dynamic GetMockFile(SearchFilter filter);
-        public BlobDownloadResult DownloadBlob(string fileName);
-        public bool FolderExists(string path);
-    }
+    public ValueTask<BinaryData?> RetrieveBlobAsync(string fileName);
+    public ValueTask<bool> PathExistsAsync(string path);
+    public ValueTask<bool> BlobExistsAsync(string fileName);
 }

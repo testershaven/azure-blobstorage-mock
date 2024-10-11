@@ -1,18 +1,23 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Text.Json.Serialization;
+using System.Xml.Serialization;
 
-namespace BlobStorage.Mock.Models
+namespace Blobstorage.Mock.Models;
+
+[Serializable()]
+[XmlRoot("Metadata")]
+public class MetadataDto
 {
-    public class MetadataDto
-    {
-        [JsonPropertyName("fileName")]
-        [Required]
-        public string FileName { get; set; }
+    [XmlElement("MinResponseTime")]
+    [JsonPropertyName("minResponseTime")]
+    public int MinResponseTime { get; set; }
 
-        [JsonPropertyName("searchTerm")]
-        public string SearchTerm { get; set; }
+    [XmlElement("MaxResponseTime")]
+    [JsonPropertyName("maxResponseTime")]
+    public int MaxResponseTime { get; set; }
 
-        [JsonPropertyName("body")]
-        public dynamic Body { get; set; }
-    }
+    [XmlElement("File")]
+    [JsonPropertyName("files")]
+    [Required]
+    public FileDto[] Files { get; set; }
 }

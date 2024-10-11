@@ -1,9 +1,8 @@
-﻿using BlobStorage.Mock.Models;
+using Blobstorage.Mock.Models;
 
-namespace BlobStorage.Mock.Services
+namespace Blobstorage.Mock.Services;
+
+public interface IPathBuilderService
 {
-    public interface IPathBuilderService
-    {
-        public SearchFilter CreateSearchFilter(string path, string request = "");
-    }
+    public ValueTask<SearchFilter> CreateSearchFilterAsync(string path, HttpRequest request);
 }

@@ -1,52 +1,111 @@
-﻿using BlobStorage.Mock.Controllers;
-using BlobStorage.Mock.Models;
 using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using System.Xml.Linq;
+using DevDecoder.DynamicXml;
+using Blobstorage.Mock.Exceptions;
+using Blobstorage.Mock.Models;
 
-namespace BlobStorage.Mock.Services
+namespace Blobstorage.Mock.Services;
+
+public class PathBuilderService : IPathBuilderService
 {
-    public class PathBuilderService : IPathBuilderService
-    {
-        private readonly ILogger<MockController> _logger;
-        private readonly IBlobStorageService _blobStorageService;
+    private readonly IBlobStorageService _blobStorageService;
+    private readonly ILogger<PathBuilderService> _logger;
 
-        public PathBuilderService(ILogger<MockController> logger, IBlobStorageService blobStorageService)
+    public PathBuilderService(IBlobStorageService blobStorageService, ILogger<PathBuilderService> logger)
+    {
+        _blobStorageService = blobStorageService;
+        _logger = logger;
+    }
+
+    public async ValueTask<SearchFilter> CreateSearchFilterAsync(string path, HttpRequest request)
+    {
+        var finalPath = "";
+        var splittedPath = path.Split('/');
+        var method = splittedPath[0];
+        string body;
+        using (StreamReader reader = new(request.Body, Encoding.UTF8))
         {
-            _logger = logger;
-            _blobStorageService = blobStorageService;
+            body = reader.ReadToEndAsync().Result;
+
+            if (string.IsNullOrEmpty(body))
+            {
+                _logger.LogInformation($"{method} mock invocked with empty body");
+            }
+            else
+            {
+                _logger.LogInformation($"{method} mock invocked with body: {body}");
+            }
         }
 
-        public SearchFilter CreateSearchFilter(string path, string body = "")
+        SearchFilter searchFilter = new();
+        StringBuilder searchTermBuilder = new();
+        do
         {
-            var searchFilter = new SearchFilter();
-            var searchTermBuilder = new StringBuilder();
-            var finalPath = "";
-            var splittedPath = path.Split('/');
-
-            do
+            var tempSplit = splittedPath[0];
+            var tempPath = finalPath + tempSplit;
+            if (await _blobStorageService.PathExistsAsync(tempPath))
             {
-                var tempSplit = splittedPath[0];
-                var tempPath = finalPath + tempSplit ;
-                if (_blobStorageService.FolderExists(tempPath))
+                finalPath = tempPath + "/";
+            }
+            else
+            {
+                if (!string.IsNullOrEmpty(body))
                 {
-                    finalPath = tempPath + "/";
+                    break;
                 }
-                else
-                {
-                    if (!string.IsNullOrEmpty(body)) break;
-                    searchTermBuilder.Append($"/{tempSplit}");
 
-                }
-                splittedPath = splittedPath.Skip(1).ToArray();
+                searchTermBuilder.Append($"/{tempSplit}");
 
-            } while (splittedPath.Length > 0);
+            }
+            splittedPath = splittedPath.Skip(1).ToArray();
 
-            searchFilter.Body = (!string.IsNullOrEmpty(body)) ? JsonSerializer.Deserialize<dynamic>(body) : null;
-            searchFilter.SearchTerm = searchTermBuilder.ToString();
-            searchFilter.Path = finalPath;
+        } while (splittedPath.Length > 0);
 
-            return searchFilter;
+        string contentType;
+        if (string.IsNullOrEmpty(request.Headers.Accept) || request.Headers.Accept == "*/*")
+        {
+            _logger.LogWarning("Accept header not set or set to */* falling back to Content-Type");
+
+            if (string.IsNullOrEmpty(request.ContentType))
+            {
+                _logger.LogWarning("Content-type header not set, will fall to metadata to assign it");
+                contentType = "";
+            }
+            else
+            {
+                contentType = request.ContentType;
+            }
+
+        }
+        else
+        {
+            contentType = request.Headers.Accept!;
+        }
+
+        searchFilter.Method = method;
+        searchFilter.Body = SetBody(body, contentType);
+        searchFilter.SearchTerm = searchTermBuilder.ToString();
+        searchFilter.Path = finalPath;
+        searchFilter.ContentType = contentType;
+
+        return searchFilter;
+    }
+
+    private static dynamic? SetBody(string body, string contentType)
+    {
+        if (!string.IsNullOrEmpty(body))
+        {
+            return contentType switch
+            {
+                "application/json" => JsonSerializer.Deserialize<dynamic>(body)!,
+                "application/xml" or "text/xml" or "text/xml; charset=utf-8" => XDocument.Parse(body).ToDynamic(),
+                _ => throw new FilterException(),
+            };
+        }
+        else
+        {
+            return null;
         }
     }
 }

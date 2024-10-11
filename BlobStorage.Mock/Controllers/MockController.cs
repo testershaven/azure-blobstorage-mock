@@ -1,47 +1,61 @@
 using Microsoft.AspNetCore.Mvc;
-using BlobStorage.Mock.Models;
-using BlobStorage.Mock.Services;
-using System.Security.Claims;
+using Blobstorage.Mock.Helpers;
+using Blobstorage.Mock.Models;
+using Blobstorage.Mock.Services;
 
-namespace BlobStorage.Mock.Controllers
+namespace Blobstorage.Mock.Controllers;
+
+[ApiController]
+[Route("[controller]")]
+public class MockController : ControllerBase
 {
-    [ApiController]
-    [Route("[controller]")]
-    public class MockController : ControllerBase
+    private readonly ILogger<MockController> _logger;
+    private readonly IMockService _storageService;
+    private readonly IPathBuilderService _pathBuilderService;
+
+    public MockController(ILogger<MockController> logger, IPathBuilderService pathBuilderService, IMockService storageService)
     {
-        private readonly ILogger<MockController> _logger;
-        private readonly IBlobStorageService _blobStorageService;
-        private readonly IPathBuilderService _pathBuilderService;
+        _storageService = storageService;
+        _pathBuilderService = pathBuilderService;
+        _logger = logger;
+    }
 
-        public MockController(ILogger<MockController> logger, IPathBuilderService pathBuilderService, IBlobStorageService blobStorageService)
+    [HttpPost("/POST/{*path:regex(^(.*)$)}")]
+    [Consumes("application/json", "application/xml", "text/xml", "text/xml; charset=utf-8")]
+    public async ValueTask<IActionResult> Post(string path)
+    {
+        _logger.LogInformation($"Post mock invocked with path: {path}");
+
+        SearchFilter searchFilter = await _pathBuilderService.CreateSearchFilterAsync("POST/" + path, Request);
+
+        MockResponse response = await _storageService.GetMockResponse(searchFilter);
+
+        await WaitHelper.Wait(response.MinResponseTime, response.MaxResponseTime);
+
+        return new ContentResult
         {
-            _blobStorageService = blobStorageService;
-            _pathBuilderService = pathBuilderService;
-            _logger = logger;
-        }
+            Content = response.Payload.ToString(),
+            ContentType = response.ContentType,
+            StatusCode = response.StatusCode
+        };
+    }
 
-        [HttpPost("/POST/{*path:regex(^(.*)$)}")]
-        public async Task<IActionResult> Post(string path, [FromBody] object request)
+    [HttpGet("/GET/{*path:regex(^(.*)$)}")]
+    public async ValueTask<IActionResult> Get(string path)
+    {
+        _logger.LogInformation($"Get mock invocked with path: {path}");
+
+        SearchFilter searchFilter = await _pathBuilderService.CreateSearchFilterAsync("GET/" + path, Request);
+
+        MockResponse response = await _storageService.GetMockResponse(searchFilter);
+
+        await WaitHelper.Wait(response.MinResponseTime, response.MaxResponseTime);
+
+        return new ContentResult
         {
-            _logger.LogInformation($"Post mock invocked with path: {path}");
-            _logger.LogDebug($"Mock invocked with request: {request}");
-
-            SearchFilter searchFilter = _pathBuilderService.CreateSearchFilter("POST/" + path, request.ToString());
-
-            object mockFile = _blobStorageService.GetMockFile(searchFilter);
-            return new JsonResult(mockFile);
-        }
-
-        [HttpGet("/GET/{*path:regex(^(.*)$)}")]
-        public IActionResult Get(string path)
-        {
-            _logger.LogInformation($"Get mock invocked with path: {path}");
-
-            SearchFilter searchFilter = _pathBuilderService.CreateSearchFilter("GET/" + path);
-
-            object mockFile = _blobStorageService.GetMockFile(searchFilter);
-
-            return new JsonResult(mockFile);
-        }
+            Content = response.Payload.ToString(),
+            ContentType = response.ContentType,
+            StatusCode = response.StatusCode
+        };
     }
 }

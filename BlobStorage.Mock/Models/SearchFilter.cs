@@ -1,15 +1,18 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
+using System.ComponentModel.DataAnnotations;
 
-namespace BlobStorage.Mock.Models
+namespace Blobstorage.Mock.Models;
+
+public class SearchFilter
 {
-    public class SearchFilter
-    {
-        public string SearchTerm { get; set; }
+#nullable disable
+    public string Method { get; set; }
 
-        public dynamic Body { get; set; }
+    public string SearchTerm { get; set; }
+    public string ContentType { get; set; }
 
-        [Required]
-        public string Path { get; set; }
-    }
+    public dynamic Body { get; set; }
+
+    [Required]
+    public string Path { get; set; }
+#nullable restore
 }
